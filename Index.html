@@ -1,118 +1,197 @@
 <!DOCTYPE html>
-<html>
 <head>
-<title>Assignment 3</title>
-</head>
-
-<body>
-
-    <h1>How has the price of HDB flats changed over time in Pasir Ris?</h1>
-
-
 <meta charset="utf-8">
 
 <!-- Load d3.js -->
 <script src="https://d3js.org/d3.v6.js"></script>
 
-<!-- Initialize a select button -->
-<select id="selectButton"></select>
+<title>Assignment 3</title>
+    <style>
+    h1 {
+        text-align: center; /* Center the heading */
+        font-family: Arial, sans-serif;
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+    text {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        margin-bottom: 20px;
+    }
+    </style>
+</head>
+<body>
+    <h1>How has the average prices of HDBs changed over time?</h1>
+</div>
 
 <!-- Create a div where the graph will take place -->
 <div id="my_dataviz"></div>
 
 <script>
+    // Set the dimensions and margins of the graph
+    const margin = { top: 20, right: 150, bottom: 50, left: 100 },
+          width = 800 - margin.left - margin.right,
+          height = 400 - margin.top - margin.bottom;
 
-    // set the dimensions and margins of the graph
-    const margin = {top: 10, right: 30, bottom: 30, left: 60},
-        width = 460 - margin.left - margin.right,
-        height = 400 - margin.top - margin.bottom;
-    
-    // append the svg object to the body of the page
+    // Append the SVG object to the body of the page
     const svg = d3.select("#my_dataviz")
-      .append("svg")
+        .append("svg")
         .attr("width", width + margin.left + margin.right)
         .attr("height", height + margin.top + margin.bottom)
-      .append("g")
+        .append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
-    
-    //Read the data
-    d3.csv("Resale Pasir Ris only.xlsb.csv").then(data => {console.log(data);
-    }).catch(error => {
-        console.error("Error loading CSV file:", error);
-    });
-    
-        // List of groups (here I have one group per column)
-        const allGroup = new Set(data.map(d => d.name))
-    
-        // add the options to the button
-        d3.select("#selectButton")
-          .selectAll('myOptions')
-             .data(allGroup)
-          .enter()
-            .append('option')
-          .text(function (d) { return d; }) // text showed in the menu
-          .attr("value", function (d) { return d; }) // corresponding value returned by the button
-    
-        // A color scale: one color for each group
-        const myColor = d3.scaleOrdinal()
-          .domain(allGroup)
-          .range(d3.schemeSet2);
-    
-        // Add X axis --> it is a date format
-        const x = d3.scaleLinear()
-          .domain(d3.extent(data, function(d) { return d.year; }))
-          .range([ 0, width ]);
+
+    // Parse the data
+    d3.csv("https://raw.githubusercontent.com/meegan29/HCDIV-3/refs/heads/main/Resale%20Pasir%20Ris%20only.csv", function(row) {
+        return {
+            year: +row.month.split("-")[0], // Extract and convert year
+            flat_type: row.flat_type,
+            resale_price: +row.resale_price // Convert to number
+        };
+    }).then(function(data) {
+        // Group data by flat_type and year, and compute averages
+        const groupedData = d3.group(data, d => d.flat_type, d => d.year);
+        const averageResalePrice = [];
+        groupedData.forEach((years, flat_type) => {
+            years.forEach((flats, year) => {
+                averageResalePrice.push({
+                    flat_type: flat_type,
+                    year: +year,
+                    avg_resale_price: d3.mean(flats, d => d.resale_price)
+                });
+            });
+        });
+
+        // Extract unique flat types and years
+        const flatTypes = Array.from(groupedData.keys()).sort().reverse(); // Sort flat types alphabetically
+        const years = [...new Set(averageResalePrice.map(d => d.year))];
+
+        // Set up scales
+        const xScale = d3.scaleLinear()
+            .domain([d3.min(years), d3.max(years)]) // X-axis: Years
+            .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(averageResalePrice, d => d.avg_resale_price)])
+            .nice()
+            .range([height, 0]);
+
+        // Add X-axis
         svg.append("g")
-          .attr("transform", `translate(0, ${height})`)
-          .call(d3.axisBottom(x).ticks(7));
-    
-        // Add Y axis
-        const y = d3.scaleLinear()
-          .domain([0, d3.max(data, function(d) { return +d.n; })])
-          .range([ height, 0 ]);
+            .attr("transform", `translate(0, ${height})`)
+            .call(d3.axisBottom(xScale).tickFormat(d3.format("d")));
+
+        // Add Y-axis
         svg.append("g")
-          .call(d3.axisLeft(y));
-    
-        // Initialize line with first group of the list
-        const line = svg
-          .append('g')
-          .append("path")
-            .datum(data.filter(function(d){return d.name=="Helen"}))
-            .attr("d", d3.line()
-              .x(function(d) { return x(d.year) })
-              .y(function(d) { return y(+d.n) })
-            )
-            .attr("stroke", function(d){ return myColor("valueA") })
-            .style("stroke-width", 4)
-            .style("fill", "none")
-    
-        // A function that update the chart
-        function update(selectedGroup) {
-    
-          // Create new data with the selection?
-          const dataFilter = data.filter(function(d){return d.name==selectedGroup})
-    
-          // Give these new data to update line
-          line
-              .datum(dataFilter)
-              .transition()
-              .duration(1000)
-              .attr("d", d3.line()
-                .x(function(d) { return x(d.year) })
-                .y(function(d) { return y(+d.n) })
-              )
-              .attr("stroke", function(d){ return myColor(selectedGroup) })
-        }
-    
-        // When the button is changed, run the updateChart function
-        d3.select("#selectButton").on("change", function(event,d) {
-            // recover the option that has been chosen
-            const selectedOption = d3.select(this).property("value")
-            // run the updateChart function with this selected option
-            update(selectedOption)
-        })
-    
-    })
-    </script>
+            .call(d3.axisLeft(yScale).tickFormat(d3.format("$,.0f"))) // Add dollar symbol and comma formatting
+            .selectAll("text") // Target the axis labels
+
+        // Add axis labels
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .style("font-weight", "bold")
+            .style("font-size", "16px")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 10)
+            .text("Year");
+
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .style("font-weight", "bold")
+            .style("font-size", "16px")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -margin.left + 30)
+            .text("Average Resale Price" + " (SGD)");
+
+        // Define a color scale
+        const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+            .domain(flatTypes);
+
+        // Line generator
+        const line = d3.line()
+            .x(d => xScale(d.year))
+            .y(d => yScale(d.avg_resale_price));
+
+        // Draw lines for each flat type
+        flatTypes.forEach(flat_type => {
+            const typeData = averageResalePrice.filter(d => d.flat_type === flat_type);
+
+        const maxPoint = d3.max(typeData, d => d.avg_resale_price);
+        const minPoint = d3.min(typeData, d => d.avg_resale_price);
+
+        const maxData = typeData.find(d => d.avg_resale_price === maxPoint);
+        const minData = typeData.find(d => d.avg_resale_price === minPoint);
+
+        svg.append("path")
+            .datum(typeData)
+            .attr("fill", "none")
+            .attr("stroke", colorScale(flat_type))
+            .attr("stroke-width", 2)
+            .attr("d", line);  
+        
+        // Add data labels for highest price
+        svg.append("text")
+            .attr("x", xScale(maxData.year) - 20)
+            .attr("y", yScale(maxData.avg_resale_price) - 10) // Slightly above the point
+            .attr("text-anchor", "middle")
+            .attr("fill", colorScale(flat_type))
+            .attr("font-size", "14px")
+            .text(d3.format("$,.0f")(maxData.avg_resale_price)); // Format as dollar with commas
+
+        // Add data labels for lowest price
+        svg.append("text")
+            .attr("x", xScale(minData.year) + 30)
+            .attr("y", yScale(minData.avg_resale_price) + 17) // Slightly below the point
+            .attr("text-anchor", "middle")
+            .attr("fill", colorScale(flat_type))
+            .attr("font-size", "14px")
+            .text(d3.format("$,.0f")(minData.avg_resale_price)); // Format as dollar with commas
+        
+        svg.append("circle")
+            .attr("cx", xScale(minData.year))
+            .attr("cy", yScale(minData.avg_resale_price)) // Slightly below the point
+            .attr("r", 4)
+            .attr("fill", colorScale(flat_type))
+        
+        svg.append("circle")
+            .attr("cx", xScale(maxData.year))
+            .attr("cy", yScale(maxData.avg_resale_price)) // Slightly below the point
+            .attr("r", 4)
+            .attr("fill", colorScale(flat_type))    
+        });
+
+        // Add legend
+        const legend = svg.selectAll(".legend")
+            .data(flatTypes)
+            .enter()
+            .append("g")
+            .attr("class", "legend")
+            .attr("transform", (d, i) => `translate(${width + 30}, ${i * 22})`);
+
+        legend.append("rect")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", 12)
+            .attr("height", 12)
+            .style("fill", d => colorScale(d));
+
+        legend.append("text")
+            .attr("x", 20)
+            .attr("y", 10)
+            .style("text-anchor", "start")
+            .text(d => {
+                // Custom label transformations
+                if (d.match(/^\d ROOM$/)) {
+                    // Convert "2 ROOM", "3 ROOM", etc. to "2 Room"
+                    return d.split(" ")[0] + " Room";
+                } else if (d === "EXECUTIVE") {
+                    // Convert "EXECUTIVE" to "Executive"
+                    return "Executive";
+                } else {
+                    // Default sentence case
+                    return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+                }
+    })});
+</script>
 </body>
-</html>
